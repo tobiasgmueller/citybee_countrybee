@@ -1,0 +1,16 @@
+site,site_num,site_type,altitude,mounting,coordinates,address,nest_placed_date
+BoylanRd,1,Forest,1123,tree,"42.37064458470633, -76.65877657447035",Connecticut Hill WMA,4/5/2022
+Cemetery,2,Forest,2013,tree,"42.363722215289386, -76.68083760453843",Connecticut Hill WMA,4/5/2022
+ConnHillRd,3,Forest,1901,tree,"42.3401927165481, -76.67949299042678",Connecticut Hill WMA,4/5/2022
+SwanHillRd_N,4,Forest,1460,tree,"42.32625664297795, -76.70455566881489",Connecticut Hill WMA,4/5/2022
+SwanHillRd_S,5,Forest,1405,tree,"42.31945034088909, -76.71147044559916",Connecticut Hill WMA,4/5/2022
+Comstock,6,Residential,873,outbuilding,"42.44659788138836, -76.47908015833646",129 Garden Ave,4/5/2022
+Fairbrother,7,Residential,798,fence,"42.437550870428375, -76.47948519146036",221 Ridgedale Rd,4/5/2022
+Moreau,8,Residential,699,house,"42.443856004422756, -76.4983673706609",112 Sears Rd,4/5/2022
+Tobias,9,Residential,420,porch,"42.45208208009007, -76.49875675273553",616 Utica St.,4/5/2022
+Danforth,10,Residential,924,trellis,"42.46470818050685, -76.49227443046654",106 Devon Rd,4/5/2022
+Cornell,11,Orchard,788,fence,"42.444809125682156, -76.4634370849594","709 Dryden Rd, Ithaca, NY 14850",4/5/2022
+Littletree,12,Orchard,1120,outbuilding,"42.35083472566488, -76.5661653373087","345 Shaffer Rd, Newfield, NY 14867",4/5/2022
+Reisinger,13,Orchard,1314,metal post,"42.37778948799015, -76.92580960360362","2750 Apple Lane, Watkins Glen, NY 14891",4/5/2022
+Indian_Creek,14,Orchard,945,metal post,"42.46998072006948, -76.54846387578743","1408 Trumansburg Rd, Ithaca, NY 14850",4/5/2022
+Black_Diamond,15,Orchard,1208,metal post,"42.55016717044061, -76.65764739223411","4675 E Seneca Rd, Trumansburg, NY 14886",4/5/2022

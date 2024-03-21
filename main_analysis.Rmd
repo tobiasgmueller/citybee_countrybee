@@ -1,0 +1,226 @@
+---
+title: "main_analysis"
+output: html_document
+date: "2024-03-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+
+#this sets wd to root dir
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+
+
+library(tidyverse) # for data playing
+library(rstatix) # for piped stats
+
+rm(list=ls())
+
+```
+
+This will be my analysis for the city bee country bee dataset
+
+
+The experimental design is 
+
+
+3 site types (forest, residential, orchard)
+5 nests within each site type (15 total sites)
+2 time points (early & late, which happened all at different times due to elevation differences)
+8 provisions gathered from each site x time point combination. 
+
+So the total number of samples for microbial analysis was 15 * 2 * 8 = 240.
+
+
+
+
+
+```{r read in data, include= FALSE}
+
+#first read in pesticide data 
+
+#pesticide type data
+pesticide_type<- read_csv(file = "input/pesticide_type.csv")
+
+# sample labels
+labels <- read_csv(file = "input/sample_labels.csv")%>% 
+  mutate_if(is.character, as.factor) #make characters factors
+
+#HPLC parameters
+parameters <- read_csv(file = "input/LOD_LOQ.csv")
+
+lod<-parameters%>%filter(parameter=="<LOQ")%>% select(!parameter)
+
+#  basically what the below does is take things not detected and sets them to 0
+# and takes things below LOQ but above LOD and sets them to LOD
+pesticide <- read_csv(file = "input/pesticide_data.csv")%>%
+  mutate(across(.cols = !c("sample_num",
+                             "matrix", 
+                             "mass_g"),
+                .fns= ~if_else(.=="<LOQ", 
+                               paste(lod %>% select(cur_column())),
+                               if_else(.=="n.d.",
+                                       "0",
+                                       (.))
+                              )%>%
+                  as.numeric(.)))%>%
+  mutate(total = rowSums(select(.,!c("sample_num",
+                             "matrix", 
+                             "mass_g"))))
+#now merge with labels
+
+df <- left_join(labels, pesticide)
+
+# make df that only has pesticide findings. (removes ai that were never found ever)
+
+df_finding <- df %>% 
+  select_if(negate(function(col) is.numeric(col) && sum(col) == 0))
+
+
+#then also make a long format for graphing 
+
+df_long <- df_finding %>% 
+  pivot_longer(!c(sample_num, site, site_num, site_type,  sample_type, matrix, mass_g),
+               names_to = "ai", values_to = "quantity")%>%
+  left_join(pesticide_type)
+
+
+ 
+
+```
+
+
+```{r pressure, echo=FALSE}
+# explore pesticide data
+
+pesticide_heatmap_early <- df_long %>%
+  filter(sample_type == "early")%>%
+   # relevel so total is at the bottom
+  mutate(ai=fct_relevel(ai,"total", after = Inf),
+         # then also create new column to facet total seperately
+#         total = ifelse(ai == "total", "yes", "no")
+         )%>%
+  ggplot(aes(site_num, ai, fill = log10(quantity)))+
+  #add border white colour of line thickness 0.25
+  geom_tile(colour="white", size=.3)+
+  #remove x and y axis labels
+  labs(x="", y="")+
+  #remove extra space
+  scale_y_discrete(expand=c(0, 0))+
+  #set a base size for all fonts
+  theme_grey(base_size=10)+
+#coord_equal()+
+  #theme options
+  theme(
+    #bold font for legend text
+    legend.text=element_text(face="bold"),
+    #set thickness of axis ticks
+    axis.ticks=element_line(size=0.4),
+    axis.ticks.x = element_blank(),
+    panel.grid.major = element_blank(),
+    #remove plot background
+    plot.background=element_blank(),
+    #remove plot border
+    panel.border=element_blank(),
+    #remove x axis ticks
+    axis.text.x=element_blank(),
+    # removed y axis facet labels
+    strip.text.y = element_blank(),
+    strip.text.x = element_text(size = 9, face="bold.italic"))+
+  scale_fill_gradientn(values=c(1, .6, .5, .4, 0),
+                       breaks=c(-1,0,1,2,3,4), 
+                       labels=c(10^-1, 
+                                10^0, 
+                                10^1, 
+                                10^2, 
+                                10^3,
+                                10^4),
+                       colours=c("black", 
+                                                               "darkred", 
+                                                               "red", 
+                                                               "orange", 
+                                                               "yellow2"))+
+  guides(fill = guide_colourbar(barwidth = .5,
+                                barheight = 10,
+                                title = "ppb"))+
+  facet_grid(type~site_type, scale = 'free', space = "free", switch="both")+
+  ggtitle("Early")
+
+pesticide_heatmap_early
+
+
+
+pesticide_heatmap_late <- df_long %>%
+  filter(sample_type == "late")%>%
+   # relevel so total is at the bottom
+  mutate(ai=fct_relevel(ai,"total", after = Inf),
+         # then also create new column to facet total seperately
+#         total = ifelse(ai == "total", "yes", "no")
+         )%>%
+  ggplot(aes(site_num, ai, fill = log10(quantity)))+
+  #add border white colour of line thickness 0.25
+  geom_tile(colour="white", size=.3)+
+  #remove x and y axis labels
+  labs(x="", y="")+
+  #remove extra space
+  scale_y_discrete(expand=c(0, 0))+
+  #set a base size for all fonts
+  theme_grey(base_size=10)+
+#coord_equal()+
+  #theme options
+  theme(
+    #bold font for legend text
+    legend.text=element_text(face="bold"),
+    #set thickness of axis ticks
+    axis.ticks=element_line(size=0.4),
+    axis.ticks.x = element_blank(),
+    panel.grid.major = element_blank(),
+    #remove plot background
+    plot.background=element_blank(),
+    #remove plot border
+    panel.border=element_blank(),
+    #remove x axis ticks
+    axis.text.x=element_blank(),
+    # removed y axis facet labels
+    strip.text.y = element_blank(),
+    strip.text.x = element_text(size = 9, face="bold.italic"))+
+  scale_fill_gradientn(values=c(1, .6, .5, .4, 0),  #where colors fall on gradient from 0-1
+                       breaks=c(-1,0,1,2,3,4),      #breaks on legend
+                       labels=c(10^-1, 
+                                10^0, 
+                                10^1, 
+                                10^2, 
+                                10^3,
+                                10^4),
+                       colours=c("black", 
+                                                               "darkred", 
+                                                               "red", 
+                                                               "orange", 
+                                                               "yellow2"))+
+  guides(fill = guide_colourbar(barwidth = .5,
+                                barheight = 10,
+                                title = "ppb"))+
+  facet_grid(type~site_type, scale = 'free', space = "free", switch="both")+
+  ggtitle("Late")
+
+pesticide_heatmap_late
+```
+
+
+Here is a heatmap showing the pesticide findings across samples for early and late sampling. Y axis is broken up into 1. fungicide, 2. herbicides , 3. insecticide, 4. synergist
+
+Total is the sum of all pesticides in that sample
+
+
+
+
+
+
+```{r}
+
+
+
+
+```
+
