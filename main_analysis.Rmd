@@ -14,6 +14,13 @@ knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 
 library(tidyverse) # for data playing
 library(rstatix) # for piped stats
+library(vegan) # for community anaylsis
+library(plotly) #for 3d nmds graphs
+
+install.packages("remotes")
+remotes::install_github("jfq3/ggordiplots")
+
+library(ggordiplots)
 
 rm(list=ls())
 
@@ -45,7 +52,9 @@ pesticide_type<- read_csv(file = "input/pesticide_type.csv")
 
 # sample labels
 labels <- read_csv(file = "input/sample_labels.csv")%>% 
-  mutate_if(is.character, as.factor) #make characters factors
+  mutate_if(is.character, as.factor)%>% #make characters factors
+  unite(site_sample, c(site_type, sample_type), sep = " ", remove = FALSE) #make new column combining site and time
+
 
 #HPLC parameters
 parameters <- read_csv(file = "input/LOD_LOQ.csv")
@@ -68,6 +77,8 @@ pesticide <- read_csv(file = "input/pesticide_data.csv")%>%
   mutate(total = rowSums(select(.,!c("sample_num",
                              "matrix", 
                              "mass_g"))))
+
+
 #now merge with labels
 
 df <- left_join(labels, pesticide)
@@ -81,12 +92,25 @@ df_finding <- df %>%
 #then also make a long format for graphing 
 
 df_long <- df_finding %>% 
-  pivot_longer(!c(sample_num, site, site_num, site_type,  sample_type, matrix, mass_g),
+  pivot_longer(!c(site_sample, sample_num, site, site_num, site_type,  sample_type, matrix, mass_g),
                names_to = "ai", values_to = "quantity")%>%
   left_join(pesticide_type)
 
 
- 
+# put datafram into matrix of just pesticides
+# this is for NMDS and permanovas
+pest_findings_matrix <- df_finding%>% 
+  select(-c(sample_num, 
+            site,
+            matrix,
+            mass_g,
+            site_type,
+            sample_type,
+            site_num,
+            total,
+            site_sample
+            ))%>%
+  as.matrix()
 
 ```
 
@@ -94,8 +118,7 @@ df_long <- df_finding %>%
 ```{r pressure, echo=FALSE}
 # explore pesticide data
 
-pesticide_heatmap_early <- df_long %>%
-  filter(sample_type == "early")%>%
+pesticide_heatmap <- df_long %>%
    # relevel so total is at the bottom
   mutate(ai=fct_relevel(ai,"total", after = Inf),
          # then also create new column to facet total seperately
@@ -144,69 +167,12 @@ pesticide_heatmap_early <- df_long %>%
   guides(fill = guide_colourbar(barwidth = .5,
                                 barheight = 10,
                                 title = "ppb"))+
-  facet_grid(type~site_type, scale = 'free', space = "free", switch="both")+
-  ggtitle("Early")
+  facet_grid(type~site_sample, scale = 'free', space = "free", switch="both")
 
-pesticide_heatmap_early
-
+pesticide_heatmap
 
 
-pesticide_heatmap_late <- df_long %>%
-  filter(sample_type == "late")%>%
-   # relevel so total is at the bottom
-  mutate(ai=fct_relevel(ai,"total", after = Inf),
-         # then also create new column to facet total seperately
-#         total = ifelse(ai == "total", "yes", "no")
-         )%>%
-  ggplot(aes(site_num, ai, fill = log10(quantity)))+
-  #add border white colour of line thickness 0.25
-  geom_tile(colour="white", size=.3)+
-  #remove x and y axis labels
-  labs(x="", y="")+
-  #remove extra space
-  scale_y_discrete(expand=c(0, 0))+
-  #set a base size for all fonts
-  theme_grey(base_size=10)+
-#coord_equal()+
-  #theme options
-  theme(
-    #bold font for legend text
-    legend.text=element_text(face="bold"),
-    #set thickness of axis ticks
-    axis.ticks=element_line(size=0.4),
-    axis.ticks.x = element_blank(),
-    panel.grid.major = element_blank(),
-    #remove plot background
-    plot.background=element_blank(),
-    #remove plot border
-    panel.border=element_blank(),
-    #remove x axis ticks
-    axis.text.x=element_blank(),
-    # removed y axis facet labels
-    strip.text.y = element_blank(),
-    strip.text.x = element_text(size = 9, face="bold.italic"))+
-  scale_fill_gradientn(values=c(1, .6, .5, .4, 0),  #where colors fall on gradient from 0-1
-                       breaks=c(-1,0,1,2,3,4),      #breaks on legend
-                       labels=c(10^-1, 
-                                10^0, 
-                                10^1, 
-                                10^2, 
-                                10^3,
-                                10^4),
-                       colours=c("black", 
-                                                               "darkred", 
-                                                               "red", 
-                                                               "orange", 
-                                                               "yellow2"))+
-  guides(fill = guide_colourbar(barwidth = .5,
-                                barheight = 10,
-                                title = "ppb"))+
-  facet_grid(type~site_type, scale = 'free', space = "free", switch="both")+
-  ggtitle("Late")
-
-pesticide_heatmap_late
 ```
-
 
 Here is a heatmap showing the pesticide findings across samples for early and late sampling. Y axis is broken up into 1. fungicide, 2. herbicides , 3. insecticide, 4. synergist
 
@@ -215,12 +181,200 @@ Total is the sum of all pesticides in that sample
 
 
 
+```{r pesticide permanova, echo= FALSE}
+
+# calculate dissimilarity matrix
+pest_dist<-vegdist(pest_findings_matrix, method='bray')
 
 
-```{r}
-
-
+#then run permanova
+pest_perm<-adonis2(pest_dist~as.factor(df_finding$site_sample), data=df_finding, permutations=9999)
+pest_perm
 
 
 ```
+
+```{r}
+#section here for NMDS
+
+pest_findings_spares<- df_finding%>% 
+  select(-c(site,
+            matrix,
+            mass_g,
+            site_type,
+            sample_type,
+            site_num,
+            total,
+            site_sample
+            ))%>%
+ column_to_rownames('sample_num') # get rid of descriptors and make Sample ID the row names
+
+
+
+### create nmds ####
+nmds_pest <- metaMDS(pest_findings_spares,  
+                        distance = "bray",       
+                        k = 2,
+                        maxit = 999,
+                        trymax = 500,
+                        wascores = TRUE,
+                        autotransform = FALSE)
+
+stressplot(nmds_pest)
+
+
+
+nmds_pest_log <- metaMDS(log(pest_findings_spares+1),  
+                        distance = "bray",       
+                        k = 3,
+                        maxit = 999,
+                        trymax = 500,
+                        wascores = TRUE,
+                        autotransform = FALSE)
+
+stressplot(nmds_pest_log)
+
+# below plots a 3d graph if k=3 above
+nmds_pest_xyz = scores(nmds_pest_log, display="sites")
+plot_ly(x=nmds_pest_xyz[,1], y=nmds_pest_xyz[,2],z=nmds_pest_xyz[,3],
+         type="scatter3d", mode="markers",
+        color=df_finding$site_sample)
+
+
+
+
+# now for a pretty 2d NMDS graph
+
+nmds_pest_plot<- gg_envfit(ord = nmds_pest,
+          env =pest_findings_spares,
+          groups = df_finding$site_sample,
+          scaling = 1,
+          perm = 999,
+          alpha = 1, 
+          angle = 20, 
+          len = 0.5, 
+          arrow.col = "black", 
+          pt.size = 3,
+          plot = TRUE)
+
+# add in arrows that are top drivers from simper
+# hq_arrows<- hq_nmds_plot$df_arrows %>%
+#   filter(var %in% c("Thiamethoxam",
+#                  "Difenoconazole",
+#                  "Indoxacarb",
+#                  "Carbaryl",
+#                  "Phosmet"))
+
+# then create the same plot with ellipses
+pest_ellipse_plot<- gg_ordiplot(ord = nmds_pest,
+            groups = df_finding$site_sample,
+            scaling = 1,
+            kind = "sd",
+            conf = NULL,
+            show.groups = "all",
+            ellipse = TRUE,
+            label = FALSE,
+            hull = FALSE,
+            spiders = FALSE,
+            plot = FALSE)
+
+#and now put those together
+
+
+# then make a base plot
+pest_ord_gg <- ggplot() + theme_bw(16) + 
+      labs(x="NMDS Axis 1", 
+           y="NMDS Axis 2",
+           color = "Sample type")+
+      ggtitle("Pescitice exposure")+
+      geom_vline(xintercept = 0,  color="gray", linetype = "longdash",
+                 size=.7) +
+      geom_hline(yintercept = 0, color="gray", linetype = "longdash",
+                 size=.7) +
+      theme(panel.grid=element_blank(),
+            legend.text = element_text(face = "italic"),
+            text = element_text(size = 30))+
+      guides(colour = guide_legend(override.aes = list(size=8)))
+ 
+ 
+ # below should increase legend circle size
+# + guides(colour = guide_legend(override.aes = list(size=10)))
+ 
+pest_ord_gg + 
+    #add ellipses
+  geom_polygon(data = pest_ellipse_plot$df_ellipse,
+            aes(x=x, y=y, 
+                fill=Group,
+                color=Group),
+            show.legend = FALSE,
+            size=1,
+            alpha=.3)+
+  #add in points
+  geom_point(data=nmds_pest_plot$df_ord, 
+             aes(x=x, y=y, 
+                 colour=Group),
+             size=3)+
+  geom_point(data=nmds_pest_plot$df_ord,
+             aes(x=x, y=y),
+             colour="black",
+             size=3, 
+             stroke=1,
+             shape=1)
+# 
+#   #add arrows
+#   geom_segment(data=hq_arrows, 
+#                    aes(x=0, y=0, 
+#                        xend=x, 
+#                        yend=y),
+#                    arrow=arrow(length = unit(0.03, "npc")),
+#                    lwd=.9,
+#                color = "black") +
+#   #add arrow labels
+#   geom_text_repel(data=hq_arrows,
+#                 aes(x=x*1.2, 
+#                     y=y*1.2, 
+#                     label=var), 
+#       #          nudge_x = 0.06, 
+#      #           nudge_y =-0.05,
+#                 color = "white", 
+#                 size = 7,
+#                 fontface = "bold",
+#                 bg.colour = "black",
+#                 bg.r = .2,
+#                 force = .7)+
+#   # adjust colors for bees
+#   scale_color_manual(values=c("#FFB91E",
+#                               "#87D4FF",
+#                               "#28885B",
+#                               "#4531DE",
+#                               "#D55E00",
+#                               "#690C37"))+
+#   scale_fill_manual(values=c("#FFB91E",
+#                              "#87D4FF",
+#                              "#28885B",
+#                              "#4531DE",
+#                              "#D55E00",
+#                              "#690C37"))
+                             
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
