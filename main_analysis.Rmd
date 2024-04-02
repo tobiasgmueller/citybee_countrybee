@@ -16,8 +16,7 @@ library(tidyverse) # for data playing
 library(rstatix) # for piped stats
 library(vegan) # for community anaylsis
 library(plotly) #for 3d nmds graphs
-
-install.packages("remotes")
+library(remotes)
 remotes::install_github("jfq3/ggordiplots")
 
 library(ggordiplots)
@@ -194,7 +193,7 @@ pest_perm
 
 ```
 
-```{r}
+```{r NMDS}
 #section here for NMDS
 
 pest_findings_spares<- df_finding%>% 
@@ -241,7 +240,12 @@ plot_ly(x=nmds_pest_xyz[,1], y=nmds_pest_xyz[,2],z=nmds_pest_xyz[,3],
         color=df_finding$site_sample)
 
 
+```
+3D NMDS, k=3, data is log transformed+1, stress = .105
 
+
+
+```{r NMDS ggplot}
 
 # now for a pretty 2d NMDS graph
 
@@ -359,7 +363,7 @@ pest_ord_gg +
 ```
 
 
-
+NMDS, k=2, non transformed, stress =.08
 
 
 
