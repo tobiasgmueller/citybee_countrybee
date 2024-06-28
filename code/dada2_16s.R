@@ -5,7 +5,6 @@
 rm(list = ls())
 
 
-
 #install code for dada 2
 
 if (!requireNamespace("BiocManager", quietly=TRUE))
@@ -31,22 +30,20 @@ library(Biostrings)
 packageVersion("Biostrings")
 library(decontam)
 packageVersion("decontam")
+library(tidyverse)
 
 
 # set path to fastq files
-path <- "sequencing_results/16S"  
+path <- "sequencing_results/16s"  
 list.files(path)
 
 #split into forward and reverse
 fnFs <- sort(list.files(path, pattern = "_R1.fastq.gz", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern = "_R2.fastq.gz", full.names = TRUE))
 
-AACMGGATTAGATACCCKG
-
-CMGGATTAGATACCCKGG
 
 # read in primer sequences to check for primers
-FWD <- "CMGGATTAGATACCCKGG"  ## 799F
+FWD <- "CMGGATTAGATACCCKGG"  ## 799Fmod3
 REV <- "AGGGTTGCGCTCGTTG"  ## 1115R
 
 # function to find complements of DNA strings
@@ -161,9 +158,9 @@ filtFs <- file.path(path.cut, "filtered", basename(cutFs))
 filtRs <- file.path(path.cut, "filtered", basename(cutRs))
 
 
-# if 220 and 105, this makes 325bp
+# if 175 and 145, this makes 320bp
 # 799 to 1115 = 316bp minus primers of 34bp
-# so overlap of ~43
+# so overlap of ~37
 
 
 #jordan trimmed at 175 and 145
@@ -206,8 +203,9 @@ mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
 # Inspect the merger data.frame from the first sample
 head(mergers[[1]])
 
-
-
+#then save mergers incase of a crash
+saveRDS(mergers, "sequencing_results/tempfiles/16s/mergers_16s.rds")
+#mergers <-readRDS("sequencing_results/tempfiles/16s/mergers_16s.rds")
 
 # construct ASV table ####
 
@@ -225,9 +223,11 @@ table(nchar(getSequences(seqtab)))
 seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
 dim(seqtab.nochim)
 
+saveRDS(seqtab.nochim, "sequencing_results/tempfiles/16s/seqtab.nochim_16s.rds")
+#seqtab.nochim <-readRDS("sequencing_results/tempfiles/16s/seqtab.nochim_16s.rds")
+
 # percent of merged sequence reads that are chimeras
 sum(seqtab.nochim)/sum(seqtab)
-
 
 
 
@@ -241,7 +241,7 @@ rownames(track) <- sample.names
 head(track)
 
 #save track
-write.csv(track, file="sequencing_results/16S/track_through_pipe.csv")
+write.csv(track, file="sequencing_results/16s/track_through_pipe.csv")
 
 #assign taxonomy
 # using SILVA 138.1 @ https://zenodo.org/records/4587955
@@ -250,7 +250,25 @@ write.csv(track, file="sequencing_results/16S/track_through_pipe.csv")
 taxa <- assignTaxonomy(seqtab.nochim, "sequencing_results/16s/tax/silva_nr99_v138.1_train_set.fa.gz", multithread=TRUE)
 
 #then add species based on exact taxonomic matching
-taxa <- addSpecies(taxa, "sequencing_results/16s/tax/silva_species_assignment_v138.1.fa.gz")
+addspecies_ref <- "sequencing_results/16s/tax/silva_species_assignment_v138.1.fa.gz"
+
+# taxa <- addSpecies(taxa, addspecies_ref)
+# this is using over 60gb of ram and then crashing so im going to split things into chuncks
+
+chunk.size <- 4000
+chunks <- split(c(1:nrow(taxa)),
+                sort(c(1:nrow(taxa))%%ceiling(nrow(taxa)/chunk.size)))
+
+chunks.species <- lapply(chunks,
+                         function(x){
+                           return(addSpecies(taxa[x,],
+                                             refFasta = addspecies_ref, verbose = TRUE))
+                         })
+taxa <- do.call(rbind, chunks.species)
+
+
+
+
 
 
 # look at taxanomic assignments
@@ -283,16 +301,74 @@ for (i in 1:dim(seqtab.nochim)[2]) {
 
 # fasta of our final ASV seqs:
 asv_fasta <- c(rbind(asv_headers, asv_seqs))
-write(asv_fasta, "input/16s/ASVs_16s.fa")
+write(asv_fasta, "input/16s/asv_16s.fa")
 
 # count table:
 asv_tab <- t(seqtab.nochim)
 row.names(asv_tab) <- asv_headers
-write.csv(asv_tab, "input/16s/ASVs_counts_16s.csv")
+write.csv(asv_tab, "input/16s/asv_counts_16s.csv")
 
 
 #taxa table
 asv_taxa<-taxa
 row.names(asv_taxa) <- asv_headers
 write.csv(asv_taxa, "input/16s/asv_taxonomy_16s.csv")
+
+
+
+# now check for contaminants ####
+
+asv_tab <- read.csv("input/16s/asv_counts_16s.csv")
+
+#set column 1 to row names
+asv_tab<- asv_tab %>%
+  `row.names<-`(., NULL) %>% 
+  column_to_rownames(var = "X")
+
+
+asv_tax <- read.csv("input/16s/asv_taxonomy_16s.csv")
+
+#set column 1 to row names
+asv_tax<- asv_tax %>%
+  `row.names<-`(., NULL) %>% 
+  column_to_rownames(var = "X")
+
+
+# create vector saying which samples are controls
+vector_for_decontam <- c(rep(FALSE, 240), rep(TRUE, 11))
+
+contam_df <- isContaminant(t(asv_tab), neg=vector_for_decontam)
+
+table(contam_df$contaminant) # identified 6 as contaminants
+
+# getting vector holding the identified contaminant IDs
+contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
+
+# in this case its 15 taxa 
+# though some dont seem like common contaminants
+asv_tax[row.names(asv_tax) %in% contam_asvs, ]
+
+
+
+
+
+# write out decontaminated files
+
+# making new fasta file
+contam_indices <- which(asv_fasta %in% paste0(">", contam_asvs))
+dont_want <- sort(c(contam_indices, contam_indices + 1))
+asv_fasta_no_contam <- asv_fasta[- dont_want]
+
+# making new count table
+asv_tab_no_contam <- asv_tab[!row.names(asv_tab) %in% contam_asvs, ]
+
+# making new taxonomy table
+asv_tax_no_contam <- asv_tax[!row.names(asv_tax) %in% contam_asvs, ]
+
+## and now writing them out to files
+write(asv_fasta_no_contam, "input/16s/asv_16s_nocontam.fa")
+write.csv(asv_tab_no_contam, "input/16s/asv_16s_counts_nocontam.csv")
+write.csv(asv_tax_no_contam, "input/16s/asv_16s_taxonomy_nocontam.csv")
+
+
 
