@@ -186,15 +186,6 @@ out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs,
                      multithread=TRUE) # On Windows set multithread=FALSE
 head(out)
 
-# now something is weird with one file so we'll drop that
-# it clearly didnt sequence correctly
-# file2delete <- "sequencing_results/ITS/cutadapt/filtered/RF245.040.Plate1.A6.ITS12.Cornell.M_R1.fastq.gz"
-# #Check its existence
-# if (file.exists(file2delete)) {
-#   #Delete file if it exists
-#   file.remove(file2delete)
-# }
-# 
 
 
 Sys.sleep(10)
@@ -276,30 +267,9 @@ write.csv(track, file=paste("sequencing_results/tempfiles/", run, "/track_throug
 
 
 
-#assign taxonomy
-# using SILVA 138.1 @ https://zenodo.org/records/4587955
-
-
-taxa <- assignTaxonomy(seqtab.nochim, "sequencing_results/16s/tax/silva_nr99_v138.1_train_set.fa.gz", multithread=TRUE)
-
-
-
-#then add species based on exact taxonomic matching
-addspecies_ref <- "sequencing_results/16s/tax/silva_species_assignment_v138.1.fa.gz"
-
-# taxa <- addSpecies(taxa, addspecies_ref)
-# this is using over 60gb of ram and then crashing so im going to split things into chuncks
-
-chunk.size <- 4000
-chunks <- split(c(1:nrow(taxa)),
-                sort(c(1:nrow(taxa))%%ceiling(nrow(taxa)/chunk.size)))
-
-chunks.species <- lapply(chunks,
-                         function(x){
-                           return(addSpecies(taxa[x,],
-                                             refFasta = addspecies_ref, verbose = TRUE))
-                         })
-taxa <- do.call(rbind, chunks.species)
+# assign taxonomy using UNITE database
+unite.ref <- "sequencing_results/ITS/tax/sh_general_release_dynamic_04.04.2024.fasta"  
+taxa <- assignTaxonomy(seqtab.nochim, unite.ref, multithread = TRUE, tryRC = TRUE)
 
 
 
