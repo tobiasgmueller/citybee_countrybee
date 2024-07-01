@@ -5,8 +5,40 @@
 rm(list = ls())
 
 
-#install code for dada 2
 
+# set run name and primers. everything should autofill from here
+#file structure should be:
+
+#> working_dir
+    #> sequencing_results
+        #> ITS (fastq files here)
+        #> 16s (fastq files here)
+        #> tempfiles
+          #> ITS
+          #> 16s  
+    #> input
+    
+
+run = "16s"
+FWD <- "CMGGATTAGATACCCKGG"  ## 799Fmod3
+REV <- "AGGGTTGCGCTCGTTG"  ## 1115R
+filter <- "(cutFs, filtFs, cutRs, filtRs,
+                     trunclen=c(175,145),
+                     maxN=0,
+                     maxEE=c(2,2),
+                     truncQ=2,
+                     minLen = 50,
+                     rm.phix=TRUE,
+                     compress=TRUE,
+                     multithread=TRUE)"
+vector_for_decontam <- c(rep(FALSE, 240), rep(TRUE, 11))
+
+# set path to fastq files
+path <- paste("sequencing_results/", run, sep="")
+list.files(path)
+
+
+#install code for dada 2
 if (!requireNamespace("BiocManager", quietly=TRUE))
   install.packages("BiocManager")
 
@@ -18,7 +50,6 @@ if (!requireNamespace("DESeq2", quietly=TRUE))
 
 if (!requireNamespace("decontam", quietly=TRUE))
   BiocManager::install("decontam")
-
 
 
 #load packages and functions
@@ -33,27 +64,24 @@ packageVersion("decontam")
 library(tidyverse)
 
 
-# set path to fastq files
-path <- "sequencing_results/16s"  
-list.files(path)
+
+test = paste("sequencing_results/", run, sep="")
+
+
 
 #split into forward and reverse
 fnFs <- sort(list.files(path, pattern = "_R1.fastq.gz", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern = "_R2.fastq.gz", full.names = TRUE))
 
 
-# read in primer sequences to check for primers
-FWD <- "CMGGATTAGATACCCKGG"  ## 799Fmod3
-REV <- "AGGGTTGCGCTCGTTG"  ## 1115R
-
 # function to find complements of DNA strings
 allOrients <- function(primer) {
-    # Create all orientations of the input sequence
-    require(Biostrings)
-    dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
-    orients <- c(Forward = dna, Complement = Biostrings::complement(dna), Reverse = Biostrings::reverse(dna),
-        RevComp = Biostrings::reverseComplement(dna))
-    return(sapply(orients, toString))  # Convert back to character vector
+  # Create all orientations of the input sequence
+  require(Biostrings)
+  dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+  orients <- c(Forward = dna, Complement = Biostrings::complement(dna), Reverse = Biostrings::reverse(dna),
+               RevComp = Biostrings::reverseComplement(dna))
+  return(sapply(orients, toString))  # Convert back to character vector
 }
 
 # find all complements of primers
@@ -70,17 +98,16 @@ filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
 
 
 
-
 # check how many times the primers appear 
 primerHits <- function(primer, fn) {
-    # Counts number of reads in which the primer is found
-    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
-    return(sum(nhits > 0))
+  # Counts number of reads in which the primer is found
+  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+  return(sum(nhits > 0))
 }
 
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), FWD.ReverseReads = sapply(FWD.orients,
-    primerHits, fn = fnRs.filtN[[1]]), REV.ForwardReads = sapply(REV.orients, primerHits,
-    fn = fnFs.filtN[[1]]), REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+                                                                                                          primerHits, fn = fnRs.filtN[[1]]), REV.ForwardReads = sapply(REV.orients, primerHits,
+                                                                                                                                                                       fn = fnFs.filtN[[1]]), REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
 
 
 
@@ -119,8 +146,8 @@ for(i in seq_along(fnFs)) {
 
 #check that cutting worked
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), FWD.ReverseReads = sapply(FWD.orients,
-    primerHits, fn = fnRs.cut[[1]]), REV.ForwardReads = sapply(REV.orients, primerHits,
-    fn = fnFs.cut[[1]]), REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
+                                                                                                        primerHits, fn = fnRs.cut[[1]]), REV.ForwardReads = sapply(REV.orients, primerHits,
+                                                                                                                                                                   fn = fnFs.cut[[1]]), REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
 
 
 
@@ -142,10 +169,7 @@ plotQualityProfile(cutRs[1:2])
 #plotQualityProfile(cutFs, aggregate = TRUE)
 #plotQualityProfile(cutRs, aggregate = TRUE)
 
-# cut looking at qualityscore, forward everything is above 30
-# slight drop to ~45 at 220
 
-#for reverse, its ~40 until around 150
 
 ShortRead::readFastq(cutFs[1])
 ShortRead::readFastq(cutRs[1])
@@ -157,24 +181,20 @@ ShortRead::readFastq(cutRs[1])
 filtFs <- file.path(path.cut, "filtered", basename(cutFs))
 filtRs <- file.path(path.cut, "filtered", basename(cutRs))
 
-
-# if 175 and 145, this makes 320bp
-# 799 to 1115 = 316bp minus primers of 34bp
-# so overlap of ~37
-
-
-#jordan trimmed at 175 and 145
+# jordan trimmed at 175 and 145
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs,
-              truncLen=c(175,145),
-              maxN=0,
-              maxEE=c(2,2),
-              truncQ=2,
-              rm.phix=TRUE,
-              compress=TRUE,
-              multithread=TRUE) # On Windows set multithread=FALSE
+                     trunclen=c(175,145),
+                     maxN=0,
+                     maxEE=c(2,2),
+                     truncQ=2,
+                     minLen = 50,
+                     rm.phix=TRUE,
+                     compress=TRUE,
+                     multithread=TRUE) # On Windows set multithread=FALSE
 head(out)
 
 
+Sys.sleep(10)
 
 # learn error rate ####
 errF <- learnErrors(filtFs, multithread=TRUE)
@@ -197,14 +217,21 @@ dadaFs[[1]]
 dadaRs[[1]]
 
 
-#Merge paird reads ####
+# quick pause to let things cool down
+Sys.sleep(30)
 
+
+#Merge paird reads ####
 mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
 # Inspect the merger data.frame from the first sample
 head(mergers[[1]])
 
 #then save mergers incase of a crash
-saveRDS(mergers, "sequencing_results/tempfiles/16s/mergers_16s.rds")
+
+
+
+
+saveRDS(mergers, paste("sequencing_results/tempfiles/", run, "/mergers_", run, ".rds", sep=""))
 #mergers <-readRDS("sequencing_results/tempfiles/16s/mergers_16s.rds")
 
 # construct ASV table ####
@@ -223,7 +250,7 @@ table(nchar(getSequences(seqtab)))
 seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
 dim(seqtab.nochim)
 
-saveRDS(seqtab.nochim, "sequencing_results/tempfiles/16s/seqtab.nochim_16s.rds")
+saveRDS(seqtab.nochim, paste("sequencing_results/tempfiles/", run, "/seqtab.nochim_", run, ".rds", sep=""))
 #seqtab.nochim <-readRDS("sequencing_results/tempfiles/16s/seqtab.nochim_16s.rds")
 
 # percent of merged sequence reads that are chimeras
@@ -241,12 +268,12 @@ rownames(track) <- sample.names
 head(track)
 
 #save track
-write.csv(track, file="sequencing_results/16s/track_through_pipe.csv")
+write.csv(track, file=paste("sequencing_results/tempfiles/", run, "/track_through_pipe.csv", sep=""))
+
+
 
 #assign taxonomy
 # using SILVA 138.1 @ https://zenodo.org/records/4587955
-
-
 taxa <- assignTaxonomy(seqtab.nochim, "sequencing_results/16s/tax/silva_nr99_v138.1_train_set.fa.gz", multithread=TRUE)
 
 #then add species based on exact taxonomic matching
@@ -271,6 +298,9 @@ taxa <- do.call(rbind, chunks.species)
 
 
 
+
+
+
 # look at taxanomic assignments
 taxa.print <- taxa # Removing sequence rownames for display only
 rownames(taxa.print) <- NULL
@@ -283,9 +313,8 @@ head(taxa.print)
 
 
 #then for now we'll save them
-saveRDS(taxa, "input/16s/taxa_16s.rds")
-
-saveRDS(seqtab.nochim, "input/16s/seqtab_nochim_16s.rds")
+saveRDS(taxa, paste("input/", run, "/taxa_", run, ".rds", sep=""))
+saveRDS(seqtab.nochim, paste("input/", run, "/seqtab_nochim_", run, ".rds", sep=""))
 
 
 
@@ -294,31 +323,28 @@ asv_seqs <- colnames(seqtab.nochim)
 asv_headers <- vector(dim(seqtab.nochim)[2], mode="character")
 
 for (i in 1:dim(seqtab.nochim)[2]) {
-    asv_headers[i] <- paste("ASV", i, sep="_")
+  asv_headers[i] <- paste("ASV", i, sep="_")
 }
 
 
-
-# fasta of our final ASV seqs:
+# fasta of our final ASV seqs
 asv_fasta <- c(rbind(asv_headers, asv_seqs))
-write(asv_fasta, "input/16s/asv_16s.fa")
-
-# count table:
+write(asv_fasta, paste("input/", run, "/asv_", run, ".fa", sep=""))
+# count table
 asv_tab <- t(seqtab.nochim)
 row.names(asv_tab) <- asv_headers
-write.csv(asv_tab, "input/16s/asv_counts_16s.csv")
-
-
+write.csv(asv_tab, paste("input/", run, "/asv_counts_", run, ".csv", sep=""))
 #taxa table
 asv_taxa<-taxa
 row.names(asv_taxa) <- asv_headers
-write.csv(asv_taxa, "input/16s/asv_taxonomy_16s.csv")
+write.csv(asv_taxa, paste("input/", run, "/asv_taxonomy_", run, ".csv", sep=""))
 
 
 
 # now check for contaminants ####
+asv_tab <- read.csv(paste("input/", run, "/asv_counts_", run, ".csv", sep="")
+                  )
 
-asv_tab <- read.csv("input/16s/asv_counts_16s.csv")
 
 #set column 1 to row names
 asv_tab<- asv_tab %>%
@@ -326,16 +352,14 @@ asv_tab<- asv_tab %>%
   column_to_rownames(var = "X")
 
 
-asv_tax <- read.csv("input/16s/asv_taxonomy_16s.csv")
+asv_tax <- read.csv(paste("input/", run, "/asv_taxonomy_", run, ".csv", sep=""))
+
+
 
 #set column 1 to row names
 asv_tax<- asv_tax %>%
   `row.names<-`(., NULL) %>% 
   column_to_rownames(var = "X")
-
-
-# create vector saying which samples are controls
-vector_for_decontam <- c(rep(FALSE, 240), rep(TRUE, 11))
 
 contam_df <- isContaminant(t(asv_tab), neg=vector_for_decontam)
 
@@ -347,8 +371,6 @@ contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
 # in this case its 15 taxa 
 # though some dont seem like common contaminants
 asv_tax[row.names(asv_tax) %in% contam_asvs, ]
-
-
 
 
 
@@ -366,9 +388,12 @@ asv_tab_no_contam <- asv_tab[!row.names(asv_tab) %in% contam_asvs, ]
 asv_tax_no_contam <- asv_tax[!row.names(asv_tax) %in% contam_asvs, ]
 
 ## and now writing them out to files
-write(asv_fasta_no_contam, "input/16s/asv_16s_nocontam.fa")
-write.csv(asv_tab_no_contam, "input/16s/asv_16s_counts_nocontam.csv")
-write.csv(asv_tax_no_contam, "input/16s/asv_16s_taxonomy_nocontam.csv")
+write(asv_fasta_no_contam, paste("input/", run, "/asv_", run, "_nocontam.fa", sep=""))
+write.csv(asv_tab_no_contam, paste("input/", run, "/asv_", run, "counts_nocontam.csv", sep=""))
+write.csv(asv_tax_no_contam, paste("input/", run, "/asv_", run, "taxonomy_nocontam.csv", sep=""))
+
+
+
 
 
 

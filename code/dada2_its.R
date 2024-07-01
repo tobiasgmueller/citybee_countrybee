@@ -22,7 +22,7 @@ rm(list = ls())
 run = "ITS"
 FWD <- "CTTGGTCATTTAGAGGAAGTAA"  ## ITS1 forward
 REV <- "GCTGCGTTCTTCATCGATGC"  ## ITS2R reverse
-
+vector_for_decontam <- c(rep(FALSE, 240), rep(TRUE, 11))
 
 # set path to fastq files
 path <- paste("sequencing_results/", run, sep="")
@@ -303,9 +303,6 @@ taxa <- do.call(rbind, chunks.species)
 
 
 
-
-
-
 # look at taxanomic assignments
 taxa.print <- taxa # Removing sequence rownames for display only
 rownames(taxa.print) <- NULL
@@ -314,12 +311,8 @@ head(taxa.print)
 
 
 
-
-
-
 #then for now we'll save them
 saveRDS(taxa, paste("input/", run, "/taxa_", run, ".rds", sep=""))
-
 saveRDS(seqtab.nochim, paste("input/", run, "/seqtab_nochim_", run, ".rds", sep=""))
 
 
@@ -333,21 +326,13 @@ for (i in 1:dim(seqtab.nochim)[2]) {
 }
 
 
-
 # fasta of our final ASV seqs:
 asv_fasta <- c(rbind(asv_headers, asv_seqs))
 write(asv_fasta, paste("input/", run, "/asv_", run, ".fa", sep=""))
-
-
-
-
-# count table:
+# count table
 asv_tab <- t(seqtab.nochim)
 row.names(asv_tab) <- asv_headers
 write.csv(asv_tab, paste("input/", run, "/asv_counts_", run, ".csv", sep=""))
-
-
-
 #taxa table
 asv_taxa<-taxa
 row.names(asv_taxa) <- asv_headers
@@ -356,7 +341,6 @@ write.csv(asv_taxa, paste("input/", run, "/asv_taxonomy_", run, ".csv", sep=""))
 
 
 # now check for contaminants ####
-
 asv_tab <- read.csv(paste("input/", run, "/asv_counts_", run, ".csv", sep="")
                   )
 
@@ -378,9 +362,6 @@ asv_tax<- asv_tax %>%
   column_to_rownames(var = "X")
 
 
-# create vector saying which samples are controls
-vector_for_decontam <- c(rep(FALSE, 240), rep(TRUE, 11))
-
 contam_df <- isContaminant(t(asv_tab), neg=vector_for_decontam)
 
 table(contam_df$contaminant) # identified 6 as contaminants
@@ -391,8 +372,6 @@ contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
 # in this case its 15 taxa 
 # though some dont seem like common contaminants
 asv_tax[row.names(asv_tax) %in% contam_asvs, ]
-
-
 
 
 
