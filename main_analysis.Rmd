@@ -173,13 +173,15 @@ pesticide_heatmap
 
 ```
 
-Here is a heatmap showing the pesticide findings across samples for early and late sampling. Y axis is broken up into 1. fungicide, 2. herbicides , 3. insecticide, 4. synergist
+A heatmap showing the pesticide findings across samples for early and late sampling. Y axis is broken up into 1. fungicide, 2. herbicides , 3. insecticide, 4. synergist
 
 Total is the sum of all pesticides in that sample
 
+\
+\
+\
 
-
-
+below is a PERMANOVA showing that there are significant differences in the pesticide composition across sites
 ```{r pesticide permanova, echo= FALSE}
 
 # calculate dissimilarity matrix
@@ -193,7 +195,7 @@ pest_perm
 
 ```
 
-```{r NMDS}
+```{r NMDS, include = FALSE}
 #section here for NMDS
 
 pest_findings_spares<- df_finding%>% 
@@ -231,7 +233,21 @@ nmds_pest_log <- metaMDS(log(pest_findings_spares+1),
                         wascores = TRUE,
                         autotransform = FALSE)
 
+```
+
+```{r NMDS stressplot, include = FALSE}
+
 stressplot(nmds_pest_log)
+stressplot(nmds_pest)
+```
+
+
+\
+\
+3D NMDS, k=3, data is log transformed+1, stress = .105 \
+Click and drag to spin!
+
+```{r 3d nmds plot}
 
 # below plots a 3d graph if k=3 above
 nmds_pest_xyz = scores(nmds_pest_log, display="sites")
@@ -241,9 +257,10 @@ plot_ly(x=nmds_pest_xyz[,1], y=nmds_pest_xyz[,2],z=nmds_pest_xyz[,3],
 
 
 ```
-3D NMDS, k=3, data is log transformed+1, stress = .105
 
-
+\
+\
+2d NMDS, k=2, data is non transformed, stress =.08
 
 ```{r NMDS ggplot}
 
@@ -363,7 +380,7 @@ pest_ord_gg +
 ```
 
 
-NMDS, k=2, non transformed, stress =.08
+
 
 
 
